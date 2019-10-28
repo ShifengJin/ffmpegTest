@@ -19,7 +19,7 @@ Interface *Interface::Get()
 
 void Interface::OpenCamera()
 {
-    gCameraManager->OpenCamera(1280, 960);
+    gCameraManager->OpenCamera(640, 480);
 }
 
 void Interface::CloseCamera()
@@ -47,5 +47,6 @@ void Interface::Start(int xoffset, int yoffset, int width, int height, std::stri
 
 void Interface::Stop()
 {
+    CCVideoWriter::GetInstance()->endWriteMp4File();
     CCVideoWriter::GetInstance()->StopRecordReleaseAllResources();
 }

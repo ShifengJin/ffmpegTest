@@ -1,6 +1,7 @@
 #include "ShowVideoWidget.h"
 #include "CameraManager.h"
-
+#include <unistd.h>
+#include <stdio.h>
 
 ShowVideoWidget::ShowVideoWidget(QWidget *para) : QOpenGLWidget(para)
 {
@@ -12,18 +13,17 @@ ShowVideoWidget::ShowVideoWidget(QWidget *para) : QOpenGLWidget(para)
     this->idU = 0;
     this->idV = 0;
 
-    this->pVShader = NULL;
-    this->pFShader = NULL;
-    this->program = NULL;
-    this->pTextureY = NULL;
-    this->pTextureU = NULL;
-    this->pTextureV = NULL;
+    this->pVShader = nullptr;
+    this->pFShader = nullptr;
+    this->program = nullptr;
+    this->pTextureY = nullptr;
+    this->pTextureU = nullptr;
+    this->pTextureV = nullptr;
 
-    this->pBufYuv420p = NULL;
+    this->pBufYuv420p = nullptr;
     this->mVideoW = 0;
     this->mVideoH = 0;
     viewFlag = false;
-    gCameraManager->OpenCamera(1280, 960);
 }
 
 ShowVideoWidget::~ShowVideoWidget()
@@ -38,8 +38,18 @@ void ShowVideoWidget::SetVideoSize(int width, int height)
 
     this->pBufYuv420p = new unsigned char[this->mVideoW * this->mVideoH * 3 / 2];
 
-    this->resize(width, height);
-    this->resizeGL(width, height);
+    int twidth = 0, theight = 0;
+    if(width > height){
+        theight = 480;
+        twidth = (int)(width * 1.0f / height * theight);
+    }else{
+        twidth = 480;
+        theight = (int)(1.0f * height / width * twidth);
+    }
+    qDebug() << "size : [" << width << ", " << height << "]";
+    qDebug() << "size : [" << twidth << ", " << theight << "]";
+    this->resize(twidth, theight);
+    this->resizeGL(twidth, theight);
 }
 
 void ShowVideoWidget::SetYUVData(unsigned char *yuvData, int width, int height)
@@ -131,10 +141,8 @@ void ShowVideoWidget::initializeGL()
 
     //设置属性ATTRIB_VERTEX的顶点矩阵值以及格式
     glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, vertexVertices);
-    qDebug() << "7";
     //设置属性ATTRIB_TEXTURE的纹理矩阵值以及格式
     glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, textureVertices);
-    qDebug() << "8";
     //启用ATTRIB_VERTEX属性的数据,默认是关闭的
     glEnableVertexAttribArray(0);
     //启用ATTRIB_TEXTURE属性的数据,默认是关闭的
@@ -168,7 +176,11 @@ void ShowVideoWidget::paintGL()
         return;
     }
 
-    gCameraManager->GetImageDataYUV420P(this->pBufYuv420p);
+    if(!gCameraManager->GetImageDataYUV420P(this->pBufYuv420p)){
+        usleep(33333);
+        update();
+    }
+
 
     //加载y数据纹理
     //激活纹理单元GL_TEXTURE0

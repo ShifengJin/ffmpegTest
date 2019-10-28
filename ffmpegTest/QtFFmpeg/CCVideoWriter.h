@@ -10,7 +10,7 @@ extern "C"{
 
 #include <pthread.h>
 #include <iostream>
-
+#include <pthread.h>
 
 class CCVideoWriter
 {
@@ -56,7 +56,6 @@ private:
     uint8_t *picture_buf;
 
     int counter = 0;
-    int frameCounter = 0;
 
 public:
     bool StartRecordWithFilePath(const char* file);
@@ -68,8 +67,17 @@ public:
     void SetVideoInSize(int videoWidth, int videoHeight);
     void SetVideoOutSize(int videoWidth, int videoHeight);
 
+private:
+    static void * RunFFmpegThread (void *param);
+    enum ThreadState{
+        THREAD_RUN,
+        THREAD_QUIT,
+    };
+    pthread_t ffmpegThread;
+    ThreadState mThreadState;
+
 public:
-    bool addVideoStream(unsigned char* yuvBuffer);
+    bool addVideoStream(unsigned char* BGRABuffer);
     bool addAudioStream();
 
     bool endWriteMp4File();

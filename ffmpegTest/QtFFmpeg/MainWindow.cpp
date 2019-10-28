@@ -51,8 +51,8 @@ void MainWindow::onStartButtonClicked()
     int height = ui->height_LE->text().toInt();
 
     if(width == -1 || height == -1){
-        width = 1280;
-        height = 960;
+        width = 640;
+        height = 480;
     }
 
     std::string outpath("1.mp4");

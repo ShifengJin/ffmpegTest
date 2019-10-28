@@ -1,16 +1,19 @@
 #include "CCVideoWriter.h"
-
-static CCVideoWriter* instance = NULL;
+#include "CameraManager.h"
+#include <QDebug>
+#include <stdio.h>
+#include <unistd.h>
+static CCVideoWriter* instance = nullptr;
 
 static pthread_mutex_t instanceMutex;
 
 CCVideoWriter* CCVideoWriter::GetInstance(){
 
-    pthread_mutex_init(&instanceMutex, NULL);
+    pthread_mutex_init(&instanceMutex, nullptr);
 
     pthread_mutex_lock(&instanceMutex);
 
-    if(instance == NULL){
+    if(instance == nullptr){
         instance = new CCVideoWriter();
     }
 
@@ -21,21 +24,20 @@ CCVideoWriter* CCVideoWriter::GetInstance(){
 
 CCVideoWriter::CCVideoWriter()
 {
-    avFormatCtx = NULL; // write mp4 head and tail
+    avFormatCtx = nullptr; // write mp4 head and tail
 
-    videoCodecCtx = NULL;
+    videoCodecCtx = nullptr;
     //audioCodecCtx = NULL;
 
-    videoStream = NULL;
+    videoStream = nullptr;
     //andioStream = NULL;
 
-    videoSwCtx = NULL;  //contex switch
-    yuvFrame = NULL;    // RGB --> YUV --> H.264
-    swsCtx = NULL;
+    videoSwCtx = nullptr;  //contex switch
+    yuvFrame = nullptr;    // RGB --> YUV --> H.264
+    swsCtx = nullptr;
     m_filePath = "";
 
     counter = 0;
-    frameCounter = 0;
     av_register_all();
     avcodec_register_all();
 }
@@ -75,15 +77,18 @@ bool CCVideoWriter::StartRecordWithFilePath(const char* file){
     }
 #else
     videoCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    if(videoCodec == nullptr){
+        qDebug() << "avcodec_find_encoder error";
+    }
 #endif
 
-
+    qDebug() << __LINE__;
     videoCodecCtx = avcodec_alloc_context3(videoCodec);
-    if(videoCodecCtx == NULL){
+    if(videoCodecCtx == nullptr){
         std::cout << "avcodec_alloc_context3 failed" << std::endl;
         return false;
     }
-
+qDebug() << __LINE__;
     videoCodecCtx->bit_rate = 400000000;
     //videoCodecCtx->width = m_videoInWidth;
     //videoCodecCtx->height = m_videoInHeight;
@@ -98,7 +103,7 @@ bool CCVideoWriter::StartRecordWithFilePath(const char* file){
     videoCodecCtx->max_b_frames = 3;
     videoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;//AV_PIX_FMT_BGR24;
     //videoCodecCtx->pix_fmt = AV_PIX_FMT_BGRA;//AV_PIX_FMT_BGR24;
-
+qDebug() << __LINE__;
     //videoCodecCtx = videoStream->codec;
     videoCodecCtx->codec_id = AV_CODEC_ID_H264;
 
@@ -143,20 +148,21 @@ bool CCVideoWriter::StartRecordWithFilePath(const char* file){
 
     }
 #endif
-
+qDebug() << __LINE__;
     // 打開編碼器
     //if(avcodec_open2(videoCodecCtx, videoCodec, &param)){
-    if(avcodec_open2(videoCodecCtx, videoCodec, NULL)){
+    if(avcodec_open2(videoCodecCtx, videoCodec, nullptr)){
         std::cout << "avcodec_open2 failed" << std::endl;
         return false;
     }
-
-    avformat_alloc_output_context2(&oAVFormatCtx, NULL, NULL, m_filePath.c_str());
-    videoStream = avformat_new_stream(oAVFormatCtx, 0);
-    if(videoStream == NULL){
+qDebug() << __LINE__;
+    avformat_alloc_output_context2(&oAVFormatCtx, nullptr, nullptr, m_filePath.c_str());
+    videoStream = avformat_new_stream(oAVFormatCtx, nullptr);
+    if(videoStream == nullptr){
         std::cout << "avformat_new_stream failed" << std::endl;
         return false;
     }
+    qDebug() << __LINE__;
     videoStream->id = 0;
     videoStream->codecpar->codec_tag = 0;
     videoStream->time_base.num = 1;
@@ -166,12 +172,11 @@ bool CCVideoWriter::StartRecordWithFilePath(const char* file){
     av_dump_format(oAVFormatCtx, 0, file, 1);
 
     swsCtx = sws_getCachedContext(swsCtx, m_videoInWidth, m_videoInHeight, AV_PIX_FMT_BGRA,
-                                  m_videoOutWidth, m_videoOutHeight, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
-
+                                  m_videoOutWidth, m_videoOutHeight, AV_PIX_FMT_YUV420P, SWS_BICUBIC, nullptr, nullptr, nullptr);
+qDebug() << __LINE__;
     picture_buf = (unsigned char*)calloc(1, sizeof(unsigned char) * m_videoInHeight * m_videoInWidth * 4);
-
     yuvFrame = av_frame_alloc();
-    if(yuvFrame == NULL){
+    if(yuvFrame == nullptr){
         std::cout << "av_frame_alloc failed" << std::endl;
         return false;
     }
@@ -183,20 +188,23 @@ bool CCVideoWriter::StartRecordWithFilePath(const char* file){
         std::cout << "av_frame_get_buffer failed" << std::endl;
         return false;
     }
-
+    qDebug() << __LINE__;
     ret = avio_open(&(oAVFormatCtx->pb), m_filePath.c_str(), AVIO_FLAG_WRITE);
     if(ret < 0){
         std::cout << "avio_open failed" << std::endl;
         return false;
     }
-
-    ret = avformat_write_header(oAVFormatCtx, NULL);
+qDebug() << __LINE__;
+    ret = avformat_write_header(oAVFormatCtx, nullptr);
     if(ret < 0){
         std::cout << "avformat_write_header failed" << std::endl;
         return false;
     }
     //av_new_packet(&videoPkt, picture_size);
-
+qDebug() << __LINE__;
+    mThreadState = THREAD_RUN;
+    pthread_create(&(this->ffmpegThread), nullptr, RunFFmpegThread, this);
+qDebug() << __LINE__;
     return true;
 }
 void CCVideoWriter::StopRecordReleaseAllResources(){
@@ -222,50 +230,76 @@ void CCVideoWriter::SetVideoOutSize(int videoWidth, int videoHeight)
     m_videoOutHeight = videoHeight;
 }
 
-bool CCVideoWriter::addVideoStream(unsigned char* yuvBuffer){
+void *CCVideoWriter::RunFFmpegThread(void *param)
+{
+    CCVideoWriter* VW = (CCVideoWriter*)param;
+    while(VW->mThreadState == THREAD_RUN){
+        if(!gCameraManager->GetImageDataBGRA(VW->picture_buf)){
+            //usleep(33333);
+            continue;
+        }
+        qDebug() << __LINE__;
+        VW->addVideoStream(VW->picture_buf);
+        qDebug() << __LINE__;
+    }
+    pthread_exit(nullptr);
+    return nullptr;
+}
 
-    memcpy(picture_buf, yuvBuffer, m_videoInWidth * m_videoInHeight * 4);
+bool CCVideoWriter::addVideoStream(unsigned char* BGRABuffer){
 
-    uint8_t *inData[AV_NUM_DATA_POINTERS] = {0};
-    inData[0] = picture_buf;
+    uint8_t *inData[AV_NUM_DATA_POINTERS] = {nullptr};
+    inData[0] = BGRABuffer;
     int inlinesize[AV_NUM_DATA_POINTERS] = {0};
     inlinesize[0] = m_videoInWidth * 4;
 
     int h = sws_scale(swsCtx, inData, inlinesize, 0, m_videoInHeight, yuvFrame->data, yuvFrame->linesize);
-
-    yuvFrame->pts = counter * 3600;
+qDebug() << __LINE__;
+    yuvFrame->pts = counter * 360;
 
     counter ++;
-
-    int ret = avcodec_send_frame(videoCodecCtx, yuvFrame);
+qDebug() << __LINE__;
+    int ret = avcodec_send_frame(videoCodecCtx,  yuvFrame);
     if(ret != 0)
         return true;
-
+qDebug() << __LINE__;
     AVPacket pkt;
     av_init_packet(&pkt);
     ret = avcodec_receive_packet(videoCodecCtx, &pkt);
     if(ret != 0)
         return true;
     av_interleaved_write_frame(oAVFormatCtx, &pkt);
-
-
+qDebug() << __LINE__;
     return true;
 }
+
 bool CCVideoWriter::addAudioStream(){
 
 }
 
 bool CCVideoWriter::endWriteMp4File(){
 
+    mThreadState = THREAD_QUIT;
+    pthread_join(this->ffmpegThread, nullptr);
     av_write_trailer(oAVFormatCtx);
     avio_close(oAVFormatCtx->pb);
     avformat_free_context(oAVFormatCtx);
     avcodec_close(videoCodecCtx);
     avcodec_free_context(&videoCodecCtx);
+    videoCodecCtx = nullptr;
+   videoCodec = nullptr;
     sws_freeContext(swsCtx);
+    swsCtx = nullptr;
     if(videoStream){
         av_free(yuvFrame);
+        videoStream = nullptr;
+        yuvFrame = nullptr;
     }
+    if(picture_buf){
+        free(picture_buf);
+        picture_buf = nullptr;
+    }
+    counter = 0;
     return true;
 }
 
